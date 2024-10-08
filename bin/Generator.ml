@@ -23,6 +23,10 @@ module Generator = struct
 
     type grammar_T = rule_T list
 
+    let _print_table x =
+        let lst = List.of_seq (Hashtbl.to_seq x) in
+        List.iter (fun (sym, set) -> Printf.printf "%s: [ %s ]\n" sym (join_array (StringSet.(set |> to_list)))) lst
+
     let _track_error cmd =
         try
             cmd
@@ -104,7 +108,8 @@ module Generator = struct
             match lst with
             | [] -> ()
             | x::xs -> (
-                let empty = can_be_empty x grammar in
+                (* let empty = can_be_empty x grammar in *)
+                let empty = false in
                 Hashtbl.add null_lookup x empty;
                 is_nullable xs
             )
@@ -129,7 +134,9 @@ module Generator = struct
         let first_table = Hashtbl.create 100 in
         let follow_table = Hashtbl.create 100 in
 
+        Printf.printf "Before nullable\n";
         let null_table = generate_nullable_lookup grammar terminals non_terminals in
+        Printf.printf "After nullable\n";
 
         let rec initialize_first_table = function
             | [] -> ()
@@ -229,6 +236,8 @@ module Generator = struct
 
         compute_sets ();
         remove_terminals follow_table;
+        Printf.printf "\nFollow:\n";
+        _print_table follow_table;
         follow_table
 
     let prod_closure (grammar : (string * string list) list) items =
