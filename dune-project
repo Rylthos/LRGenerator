@@ -1,6 +1,6 @@
 (lang dune 3.15)
 
-(name LRParser)
+(name LRGenerator)
 
 (generate_opam_files true)
 
@@ -16,7 +16,7 @@
 (documentation https://url/to/documentation)
 
 (package
- (name LRParser)
+ (name LRGenerator)
  (synopsis "A short synopsis")
  (description "A longer description")
  (depends ocaml dune)

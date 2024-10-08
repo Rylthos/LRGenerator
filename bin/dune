@@ -1,4 +1,4 @@
 (executable
- (public_name LRParser)
+ (public_name LRGenerator)
  (name main)
- (libraries LRParser))
+ (libraries LRGenerator))

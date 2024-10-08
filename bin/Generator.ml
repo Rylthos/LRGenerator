@@ -23,9 +23,6 @@ module Generator = struct
 
     type grammar_T = rule_T list
 
-    let _print_table x =
-        let lst = List.of_seq (Hashtbl.to_seq x) in
-        List.iter (fun (sym, set) -> Printf.printf "%s: [ %s ]\n" sym (join_array (StringSet.(set |> to_list)))) lst
 
     let _track_error cmd =
         try
@@ -52,6 +49,10 @@ module Generator = struct
     let rec join_array = function
         | [] -> ""
         | x::xs -> Printf.sprintf "%s %s" x (join_array xs)
+
+    let _print_table x =
+        let lst = List.of_seq (Hashtbl.to_seq x) in
+        List.iter (fun (sym, set) -> Printf.printf "%s: [ %s ]\n" sym (join_array (StringSet.(set |> to_list)))) lst
 
     let get_rule (grammar : grammar_T) ((rule, _) : item_T) : rule_T =
         List.nth grammar rule
