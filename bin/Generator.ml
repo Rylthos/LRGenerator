@@ -34,6 +34,11 @@ module Generator = struct
         | REDUCE r -> Printf.sprintf "R%d" r
         | ACCEPT -> Printf.sprintf "ACC"
 
+    let string_of_action_goto = function
+        | SHIFT s -> Printf.sprintf "%d" s
+        | REDUCE r -> Printf.sprintf "%d" r
+        | ACCEPT -> Printf.sprintf ""
+
     let rec take n x =
         match n, x with
         | 0, _ -> []
@@ -380,11 +385,11 @@ module Generator = struct
         let action_tbl, full_groups = generate_groups_and_action grammar follow_table in
         (action_tbl, full_groups)
 
-    let print_action_table (_grammar : grammar_T) (action_table : action_table_T) (_full_group : group_table_T) (terminals : StringSet.t) (non_terminals : StringSet.t) : unit =
+    let print_action_table (_grammar : grammar_T) (action_table : action_table_T) (_full_group : group_table_T) (terminals : StringSet.t) (non_terminals : StringSet.t) (start_state) : unit =
         let rec print_list = function
             | [] -> Printf.printf "\n"; ()
             | x::xs ->
-                    if (String.length x) = 0 then (
+                    if x = start_state then (
                         print_list xs
                     ) else (
                         let str =
@@ -398,12 +403,15 @@ module Generator = struct
         let rec print_items current_group max_group full_items =
             let print_item x =
                     let entry = Hashtbl.find_opt action_table (current_group, x) in
-                    if String.length x = 0 then
+                    if x = start_state then
                         ()
                     else (
                         (match entry with
                         | Some s ->
-                                Printf.printf " %5s |" (string_of_action s);
+                                if StringSet.(non_terminals |> mem x) then
+                                    Printf.printf " %5s |" (string_of_action_goto s)
+                                else
+                                    Printf.printf " %5s |" (string_of_action s)
                         | None ->
                                 Printf.printf " %5s |" "";
                         );
