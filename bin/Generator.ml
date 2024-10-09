@@ -52,7 +52,7 @@ module Generator = struct
 
     let _print_table x =
         let lst = List.of_seq (Hashtbl.to_seq x) in
-        List.iter (fun (sym, set) -> Printf.printf "%s: [ %s ]\n" sym (join_array (StringSet.(set |> to_list)))) lst
+        List.iter (fun (sym, set) -> Printf.printf "%s: [ %s ]\n" sym (join_array (StringSet.(set |> elements)))) lst
 
     let get_rule (grammar : grammar_T) ((rule, _) : item_T) : rule_T =
         List.nth grammar rule
@@ -71,73 +71,57 @@ module Generator = struct
     let _print_itemset (grammar : grammar_T) (current_set_index : int) (itemset : ItemSet.t) : unit =
         let rec print_list = function
             | x::xs ->
-                    Printf.printf "%d:\n" current_set_index;
                     print_item grammar x;
                     print_list xs
             | [] -> ()
         in
-        let list = ItemSet.(itemset |> to_list) in
+        Printf.printf "%d:\n" current_set_index;
+        let list = ItemSet.(itemset |> elements) in
         print_list list; Printf.printf "\n"
 
-    let generate_nullable_lookup (grammar : grammar_T) (terminals : StringSet.t) (non_terminals : StringSet.t) : (string, bool) Hashtbl.t =
-        let null_lookup = Hashtbl.create 100 in
-
-        let rec can_be_empty non_term lst =
-            match lst with
-            | [] -> false
-            | (sym, prod)::gs -> (
-                if sym = non_term then (
-                    let hd = List.hd prod in
-                    (* Printf.printf "%s -> %s\n" sym (join_array prod); *)
-                    if StringSet.(terminals |> mem hd) then (
-                        if hd = "EMPTY" then true
-                        else can_be_empty non_term gs
-                    ) else (
-                        if hd = non_term then can_be_empty non_term gs
-                        else (
-                            let empties = List.map (fun x -> can_be_empty x grammar) prod in
-                            List.fold_left (fun x y -> x && y) true empties
-                        )
-                    )
-                ) else (
-                    can_be_empty non_term gs
-                )
-            )
+    let generate_nullable_lookup (grammar : grammar_T) : StringSet.t =
+        let rec find_nullable_rules compare_set rules =
+            match rules with
+            | [] -> []
+            | (head, prod)::rs ->
+                let nullable = List.filter (fun x -> not StringSet.(compare_set |> mem x)) prod in
+                if List.length nullable > 0 then
+                    find_nullable_rules compare_set rs
+                else
+                    head :: find_nullable_rules compare_set rs
+        in
+        let rec add_list_to_set set list =
+            match list with
+            | [] -> set
+            | x::xs ->
+                add_list_to_set (StringSet.(set |> add x)) xs
+        in
+        let loop = fun () ->
+            let changed = ref true in
+            let nullable_set = ref StringSet.(["EMPTY"] |> of_list) in
+            while not !changed do
+                changed := false;
+                let new_rules = find_nullable_rules !nullable_set grammar in
+                let new_set = add_list_to_set !nullable_set new_rules in
+                let diff =  StringSet.diff new_set !nullable_set in
+                if List.length (StringSet.elements diff) != 0 then (
+                    changed := true;
+                    nullable_set := new_set;
+                );
+            done;
+            !nullable_set
         in
 
-        let rec is_nullable lst =
-            match lst with
-            | [] -> ()
-            | x::xs -> (
-                (* let empty = can_be_empty x grammar in *)
-                let empty = false in
-                Hashtbl.add null_lookup x empty;
-                is_nullable xs
-            )
-        in
+        loop ()
 
-        let non_terminal_list = StringSet.(non_terminals |> to_list) in
-        is_nullable non_terminal_list;
-        null_lookup
-
-
-    let check_is_nullable (terminals : StringSet.t) (null_lookup : (string, bool) Hashtbl.t) (symbol : string) : bool =
-        if StringSet.(terminals |> mem symbol) then (
-            if symbol = "EMPTY" then
-                true
-            else
-                false
-        ) else (
-            Hashtbl.find null_lookup symbol
-        )
+    let check_is_nullable (null_lookup : StringSet.t) (symbol : string) : bool =
+        StringSet.(null_lookup |> mem symbol)
 
     let generate_follow_table (grammar : grammar_T) (terminals : StringSet.t) (non_terminals : StringSet.t) : follow_table_T =
         let first_table = Hashtbl.create 100 in
         let follow_table = Hashtbl.create 100 in
 
-        Printf.printf "Before nullable\n";
-        let null_table = generate_nullable_lookup grammar terminals non_terminals in
-        Printf.printf "After nullable\n";
+        let null_lookup = generate_nullable_lookup grammar in
 
         let rec initialize_first_table = function
             | [] -> ()
@@ -150,7 +134,7 @@ module Generator = struct
         in
 
         let list_all_nullable (list : string list) =
-            let nullable_list = List.map (fun x -> check_is_nullable terminals null_table x) list in
+            let nullable_list = List.map (fun x -> check_is_nullable null_lookup x) list in
             List.fold_left (fun acc y -> acc && y) true nullable_list
         in
 
@@ -232,13 +216,11 @@ module Generator = struct
             Hashtbl.filter_map_inplace comparator set
         in
 
-        initialize_first_table (StringSet.(terminals |> to_list));
-        initialize_follow_table (StringSet.(non_terminals |> to_list));
+        initialize_first_table (StringSet.(terminals |> elements));
+        initialize_follow_table (StringSet.(non_terminals |> elements));
 
         compute_sets ();
         remove_terminals follow_table;
-        Printf.printf "\nFollow:\n";
-        _print_table follow_table;
         follow_table
 
     let prod_closure (grammar : (string * string list) list) items =
@@ -286,7 +268,7 @@ module Generator = struct
                 | Some _ ->
                     let rule, index = i in
                     let item = (rule, index + 1) in
-                    let items = ItemSet.(prod_closure grammar [ item ] |> to_list) in
+                    let items = ItemSet.(prod_closure grammar [ item ] |> elements) in
                     if (Hashtbl.mem hashtable sym) then (
                         Hashtbl.replace hashtable sym (items @ (Hashtbl.find hashtable sym));
                         partition_set_rec is hashtable
@@ -297,7 +279,7 @@ module Generator = struct
                 | None -> partition_set_rec is hashtable
                 )
         in
-        let hashtable = partition_set_rec (ItemSet.(items |> to_list)) (Hashtbl.create 5) in
+        let hashtable = partition_set_rec (ItemSet.(items |> elements)) (Hashtbl.create 5) in
         let list = List.of_seq (Hashtbl.to_seq hashtable) in
         List.map (fun (x, y) ->
             (x, ItemSet.(y |> of_list))) list
@@ -320,12 +302,11 @@ module Generator = struct
                           | None -> ()
                           | Some s -> Hashtbl.add action_tbl (current_set, s) (SHIFT existing_index)
                     in
-                    []
+                    add_sets_to_table current_set ss
                 ) else (
                     let new_set = !next_set in
                     next_set := !next_set + 1;
                     Hashtbl.add added_groups set new_set;
-                    (* print_itemset grammar new_set set; *)
                     let _ = match sym with
                           | Some s -> Hashtbl.add action_tbl (current_set, s) (SHIFT new_set)
                           | None -> ()
@@ -337,12 +318,7 @@ module Generator = struct
             match current_sets with
             | [] -> ()
             | (current_set, (_, lst))::ss ->
-                (* Printf.printf "\nGenerate_set_rec\n"; *)
-                (* Printf.printf "List:\n"; *)
-                (* List.iter (fun x -> print_item grammar x) ItemSet.(lst |> to_list); *)
                 let new_sets = partition_set grammar lst in
-                (* Printf.printf "Generated Sets: \n"; *)
-                (* print_partition_set grammar current_set new_sets; *)
                 let to_add_sets = add_sets_to_table current_set new_sets in
                 let new_array = ss @ to_add_sets in
 
@@ -377,14 +353,14 @@ module Generator = struct
                 | (state, _)::xs -> (
                     let (non_term, _) = List.nth grammar state in
                     let reduce_states = Hashtbl.find follow non_term in
-                    add_reduce_to_state group state (StringSet.(reduce_states |> to_list));
+                    add_reduce_to_state group state (StringSet.(reduce_states |> elements));
                     add_reduce group xs
                 )
             in
             match elements with
             | [] -> ()
             | (set, group)::xs ->
-                let lst = ItemSet.(set |> to_list) in
+                let lst = ItemSet.(set |> elements) in
                 let end_elements = dot_at_end lst in
                 add_reduce group end_elements;
                 add_reduce_to_action xs
@@ -393,6 +369,11 @@ module Generator = struct
         generate_set_rec [ (0, first_element) ];
         add_reduce_to_action (List.of_seq (Hashtbl.to_seq added_groups));
         (action_tbl, added_groups)
+
+    let _print_partition_set (grammar : grammar_T) (set : group_table_T) =
+        let list = Hashtbl.fold (fun x y acc -> (x, y) :: acc) set [] in
+        let list = List.sort (fun (_, x) (_, y) -> compare x y) list in
+        List.iter (fun (set, index) -> _print_itemset grammar index set) list
 
     let generate_action_table (grammar : grammar_T) (terminals : StringSet.t) (non_terminals : StringSet.t) : action_table_T * group_table_T =
         let follow_table = generate_follow_table grammar terminals non_terminals in
@@ -438,7 +419,7 @@ module Generator = struct
             )
         in
 
-        let order_of_items = ((StringSet.(terminals |> to_list)) @ (StringSet.(non_terminals |> to_list))) in
+        let order_of_items = ((StringSet.(terminals |> elements)) @ (StringSet.(non_terminals |> elements))) in
         let ((max_group, _), _) = List.hd (List.sort (fun ((a, _), _) ((b, _), _) -> b - a) (List.of_seq (Hashtbl.to_seq action_table))) in
 
         Printf.printf "      |"; print_list order_of_items;

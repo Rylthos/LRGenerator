@@ -24,7 +24,19 @@ let grammar = [
 ]
 
 let non_terminals = Generator.StringSet.([ ""; "E"; "F"; "T"; "G"; "H" ] |> of_list)
-let terminals = Generator.StringSet.([ "+"; "-"; "^"; "trig"; "!"; "n"; "EMPTY"; "EOS" ] |> of_list)
+let terminals = Generator.StringSet.([ "+"; "-"; "^"; "trig"; "!"; "n"; "EOS" ] |> of_list)
+
+(* let grammar = [ *)
+(*     ("",  [ "A" ]); *)
+(*     ("A", [ "B"; "C"; "D" ]); *)
+(*     ("B", [ "a" ]); *)
+(*     ("C", [ "+" ]); *)
+(*     ("C", [ "EMPTY" ]); *)
+(*     ("D", [ "b" ]) *)
+(* ] *)
+(**)
+(* let non_terminals = Generator.StringSet.([ ""; "A"; "B"; "C"; "D" ] |> of_list) *)
+(* let terminals = Generator.StringSet.([ "a"; "+"; "b"; "EMPTY"; "EOS" ] |> of_list) *)
 
 let () =
     let action_tbl, full_sets = Generator.generate_action_table grammar terminals non_terminals in
