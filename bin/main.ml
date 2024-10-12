@@ -47,14 +47,18 @@ let parse_file = fun () ->
         match entries with
         | [] -> ()
         | x::xs ->
-            try
-                let remaining = List.tl (List.tl x) in (* Remove -> *)
-                let head = get_element (List.hd x) in
-                let productions = parse_entry remaining [] in
-                let generated_productions = generate_productions head productions in
-                grammar := !grammar @ generated_productions;
+            if (List.hd x) = "" then
                 parse_entries xs
-            with _ -> ()
+            else (
+                try
+                    let remaining = List.tl (List.tl x) in (* Remove -> *)
+                    let head = get_element (List.hd x) in
+                    let productions = parse_entry remaining [] in
+                    let generated_productions = generate_productions head productions in
+                    grammar := !grammar @ generated_productions;
+                    parse_entries xs
+                with _ -> ()
+            )
     in
 
     let entire_file = In_channel.with_open_bin !input_file In_channel.input_all in
@@ -70,8 +74,3 @@ let () =
 
     let action_tbl, full_sets = Generator.generate_action_table !grammar !terminals !non_terminals in
     Generator.print_action_table !grammar action_tbl full_sets !terminals !non_terminals !start_symbol
-
-(*
-    Issues with Nullable generation
-    Shifts wrong on non_terminals
-*)
